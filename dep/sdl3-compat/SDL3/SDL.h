@@ -7,6 +7,32 @@
 #include <SDL.h>
 #include <SDL_syswm.h>
 
+// X11 headers (pulled in by SDL_syswm.h) define macros that break C++ code.
+#ifdef None
+#undef None
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
+#ifdef Status
+#undef Status
+#endif
+#ifdef KeyPress
+#undef KeyPress
+#endif
+#ifdef KeyRelease
+#undef KeyRelease
+#endif
+#ifdef Success
+#undef Success
+#endif
+
 #include <cstdlib>
 #include <cstring>
 
@@ -258,9 +284,9 @@ static inline bool InitSubSystem(Uint32 flags) { return ::SDL_InitSubSystem(flag
 static inline bool InitHapticRumble(SDL_Haptic* h) { return ::SDL_HapticRumbleInit(h) == 0; }
 static inline bool PlayHapticRumble(SDL_Haptic* h, float s, Uint32 l) { return ::SDL_HapticRumblePlay(h, s, l) == 0; }
 
-// Screensaver
-static inline bool DisableScreenSaver() { return ::SDL_DisableScreenSaver() == 0; }
-static inline bool EnableScreenSaver() { return ::SDL_EnableScreenSaver() == 0; }
+// Screensaver (SDL2 returns void, SDL3 returns bool)
+static inline bool DisableScreenSaver() { ::SDL_DisableScreenSaver(); return true; }
+static inline bool EnableScreenSaver() { ::SDL_EnableScreenSaver(); return true; }
 
 // Gamepad sensor
 static inline bool SetGamepadSensorEnabled(SDL_GameController* gp, SDL_SensorType t, bool e)
