@@ -1,0 +1,172 @@
+name: Build-spruce-station
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure beta release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="beta-${{ github.ref_name }}"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" \
+              --target "${{ github.ref_name }}" \
+              --title "Beta Build (${{ github.ref_name }})" \
+              --prerelease \
+              --notes "DuckStation SDL binaries built from ${{ github.ref_name }}" \
+            || true
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ccache-aarch64
+          key: ccache-duckstation-aarch64-${{ github.sha }}
+          restore-keys: ccache-duckstation-aarch64-
+
+      - name: Build Docker image
+        run: docker build -t duckstation-builder .
+
+      - name: Download prebuilt dependencies
+        run: |
+          DEPS_VERSION=$(cat dep/PREBUILT-VERSION)
+          cd dep/prebuilt
+          curl --retry 5 --retry-all-errors -LO "https://github.com/duckstation/dependencies/releases/download/$DEPS_VERSION/deps-linux-cross-arm64.tar.xz"
+          sha256sum --check --ignore-missing ../PREBUILT-SHA256SUMS
+          tar -xf deps-linux-cross-arm64.tar.xz
+          rm deps-linux-cross-arm64.tar.xz
+
+      - name: Build DuckStation
+        run: |
+          mkdir -p output ccache-aarch64
+          docker run --rm \
+            -e CCACHE_DIR=/ccache \
+            -v ${{ github.workspace }}:/src \
+            -v ${{ github.workspace }}/output:/output \
+            -v ${{ github.workspace }}/ccache-aarch64:/ccache \
+            duckstation-builder bash -c '
+              set -e
+
+              # ccache setup
+              export PATH="/usr/lib/ccache:$PATH"
+              ccache --max-size=1G
+              ccache --zero-stats
+
+              # Create toolchain file for aarch64 cross-compilation
+              cat > /tmp/toolchain.cmake << TOOLCHAIN
+              set(CMAKE_SYSTEM_NAME Linux)
+              set(CMAKE_SYSTEM_PROCESSOR aarch64)
+              set(CMAKE_C_COMPILER clang-19)
+              set(CMAKE_CXX_COMPILER clang++-19)
+              set(CMAKE_C_COMPILER_TARGET aarch64-linux-gnu)
+              set(CMAKE_CXX_COMPILER_TARGET aarch64-linux-gnu)
+              set(CMAKE_C_COMPILER_AR llvm-ar-19)
+              set(CMAKE_C_COMPILER_RANLIB llvm-ranlib-19)
+              set(CMAKE_CXX_COMPILER_AR llvm-ar-19)
+              set(CMAKE_CXX_COMPILER_RANLIB llvm-ranlib-19)
+              set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+              set(CMAKE_MODULE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+              set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
+              set(CMAKE_SYSROOT /usr/aarch64-linux-gnu)
+              set(CMAKE_FIND_ROOT_PATH "/src/dep/prebuilt/linux-cross-arm64;/usr/aarch64-linux-gnu;/usr/lib/aarch64-linux-gnu")
+              set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+              set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+              set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
+              set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+              set(PKG_CONFIG_EXECUTABLE /usr/bin/aarch64-linux-gnu-pkg-config)
+              TOOLCHAIN
+
+              cd /src
+
+              cmake -B build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+                -DCMAKE_TOOLCHAIN_FILE=/tmp/toolchain.cmake \
+                -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DBUILD_SDL_FRONTEND=ON \
+                -DENABLE_X11=OFF \
+                -DENABLE_WAYLAND=OFF \
+                -DENABLE_GBM=ON \
+                -DHOST_MIN_PAGE_SIZE=4096 \
+                -DHOST_MAX_PAGE_SIZE=16384 \
+                -DHOST_CACHE_LINE_SIZE=64
+
+              cmake --build build --parallel
+
+              # Package
+              OUTDIR="/output/duckstation-aarch64"
+              mkdir -p "$OUTDIR/lib"
+
+              cp build/bin/duckstation-sdl "$OUTDIR/"
+              if [ -d build/bin/resources ]; then
+                cp -r build/bin/resources "$OUTDIR/"
+              fi
+
+              # Collect shared library dependencies
+              CROSS=aarch64-linux-gnu
+              DEPS="/src/dep/prebuilt/linux-cross-arm64"
+              SKIP_LIBS="linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libgcc_s|libstdc\+\+|libSDL2|libdrm|libgbm|libEGL|libGLES|libMali|libudev|libasound"
+
+              collect_lib() {
+                local lib="$1"
+                [ -f "$OUTDIR/lib/$lib" ] && return
+                echo "$lib" | grep -qE "$SKIP_LIBS" && return
+                local src
+                src=$(find "$DEPS/lib" "/usr/lib/$CROSS" "/lib/$CROSS" -maxdepth 2 -name "$lib" 2>/dev/null | head -1)
+                if [ -n "$src" ]; then
+                  cp -L "$src" "$OUTDIR/lib/$lib"
+                  echo "  Collected: $lib"
+                fi
+              }
+
+              echo "=== Collecting dependencies ==="
+              ${CROSS}-readelf -d "$OUTDIR/duckstation-sdl" 2>/dev/null | grep NEEDED | \
+                sed "s/.*\[\(.*\)\]/\1/" | while read -r lib; do collect_lib "$lib"; done
+
+              for so in "$OUTDIR"/lib/*.so*; do
+                [ -f "$so" ] || continue
+                ${CROSS}-readelf -d "$so" 2>/dev/null | grep NEEDED | \
+                  sed "s/.*\[\(.*\)\]/\1/" | while read -r lib; do collect_lib "$lib"; done
+              done
+
+              # Set RPATH and strip
+              patchelf --set-rpath "\$ORIGIN/lib" "$OUTDIR/duckstation-sdl"
+              for so in "$OUTDIR"/lib/*.so*; do
+                [ -f "$so" ] || continue
+                patchelf --set-rpath "\$ORIGIN" "$so" 2>/dev/null || true
+              done
+
+              llvm-strip "$OUTDIR/duckstation-sdl" 2>/dev/null || true
+              for so in "$OUTDIR"/lib/*.so*; do
+                [ -f "$so" ] || continue
+                llvm-strip "$so" 2>/dev/null || true
+              done
+
+              cd /output
+              tar -czf duckstation-aarch64.tar.gz duckstation-aarch64/
+
+              echo "=== Package contents ==="
+              ls -la "$OUTDIR/"
+              ls -la "$OUTDIR/lib/" 2>/dev/null || true
+
+              echo "=== ccache stats ==="
+              ccache --show-stats
+            '
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "beta-${{ github.ref_name }}" output/duckstation-aarch64.tar.gz --clobber

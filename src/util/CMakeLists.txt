@@ -149,6 +149,17 @@ if(ENABLE_OPENGL)
         "${Wayland_INCLUDE_DIRS}" # For wayland-egl
       )
     endif()
+    if(ENABLE_GBM)
+      target_sources(util PRIVATE
+        drm_display.cpp
+        drm_display.h
+        opengl_context_egl_gbm.cpp
+        opengl_context_egl_gbm.h
+      )
+      target_compile_definitions(util PRIVATE "-DENABLE_GBM=1")
+      target_link_libraries(util PRIVATE ${GBM_LIBRARIES} ${LIBDRM_LIBRARIES})
+      target_include_directories(util PRIVATE ${GBM_INCLUDE_DIRS} ${LIBDRM_INCLUDE_DIRS})
+    endif()
     if(ANDROID)
       target_include_directories(util PRIVATE "${CMAKE_SOURCE_DIR}/android")
     endif()

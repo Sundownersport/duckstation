@@ -42,6 +42,10 @@
 
 #include <SDL3/SDL.h>
 
+#ifdef ENABLE_GBM
+#include "util/drm_display.h"
+#endif
+
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -86,6 +90,10 @@ static SDL_Window* s_sdl_window = nullptr;
 static bool s_shutdown_flag = false;
 static bool s_start_fullscreen = true;
 static bool s_relative_mouse_enabled = false;
+
+#ifdef ENABLE_GBM
+static std::unique_ptr<DRMDisplay> s_drm_display;
+#endif
 
 } // namespace SDLHost
 
@@ -159,11 +167,21 @@ void SDLHost::FillWindowInfo(WindowInfo* wi)
 {
   *wi = {};
 
+#ifdef ENABLE_GBM
+  if (s_drm_display)
+  {
+    wi->type = WindowInfoType::DRM;
+    wi->display_connection = s_drm_display.get();
+    wi->surface_width = static_cast<u16>(s_drm_display->GetWidth());
+    wi->surface_height = static_cast<u16>(s_drm_display->GetHeight());
+    wi->surface_scale = 1.0f;
+    return;
+  }
+#endif
+
   if (!s_sdl_window)
     return;
 
-  // For handheld devices without X11/Wayland, use Surfaceless.
-  // The GPU device will create an EGL context via SDL's native window.
   wi->type = WindowInfoType::Surfaceless;
 
   int w, h;
@@ -589,10 +607,32 @@ std::optional<WindowInfo> Host::AcquireRenderWindow(RenderAPI render_api, bool f
   // Destroy existing window if switching modes.
   SDLHost::DestroySDLWindow();
 
-  if (!SDLHost::CreateSDLWindow(fullscreen))
+#ifdef ENABLE_GBM
+  // Try DRM/GBM first for direct display output (handhelds without X11/Wayland).
+  if (!SDLHost::s_drm_display)
   {
-    Error::SetStringView(error, "Failed to create SDL window");
-    return std::nullopt;
+    auto drm = std::make_unique<DRMDisplay>();
+    if (drm->Initialize())
+    {
+      INFO_LOG("Using DRM/GBM display output ({}x{})", drm->GetWidth(), drm->GetHeight());
+      SDLHost::s_drm_display = std::move(drm);
+    }
+    else
+    {
+      INFO_LOG("DRM display not available, falling back to SDL window");
+    }
+  }
+#endif
+
+#ifdef ENABLE_GBM
+  if (!SDLHost::s_drm_display)
+#endif
+  {
+    if (!SDLHost::CreateSDLWindow(fullscreen))
+    {
+      Error::SetStringView(error, "Failed to create SDL window");
+      return std::nullopt;
+    }
   }
 
   WindowInfo wi;
@@ -607,11 +647,18 @@ std::optional<WindowInfo> Host::AcquireRenderWindow(RenderAPI render_api, bool f
 
 WindowInfoType Host::GetRenderWindowInfoType()
 {
+#ifdef ENABLE_GBM
+  if (SDLHost::s_drm_display)
+    return WindowInfoType::DRM;
+#endif
   return WindowInfoType::Surfaceless;
 }
 
 void Host::ReleaseRenderWindow()
 {
+#ifdef ENABLE_GBM
+  SDLHost::s_drm_display.reset();
+#endif
   SDLHost::DestroySDLWindow();
 }
 

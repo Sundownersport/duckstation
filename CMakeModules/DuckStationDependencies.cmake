@@ -151,6 +151,12 @@ if(NOT WIN32)
       list(APPEND CMAKE_MODULE_PATH "${ECM_MODULE_PATH}")
       find_package(Wayland REQUIRED Egl)
     endif()
+
+    if(ENABLE_GBM)
+      find_package(PkgConfig REQUIRED)
+      pkg_check_modules(GBM REQUIRED gbm)
+      pkg_check_modules(LIBDRM REQUIRED libdrm)
+    endif()
   endif()
 endif()
 

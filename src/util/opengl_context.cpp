@@ -24,6 +24,9 @@
 #else
 #ifdef ENABLE_EGL
 #include "opengl_context_egl.h"
+#ifdef ENABLE_GBM
+#include "opengl_context_egl_gbm.h"
+#endif
 #ifdef ENABLE_WAYLAND
 #include "opengl_context_egl_wayland.h"
 #endif
@@ -158,6 +161,10 @@ std::unique_ptr<OpenGLContext> OpenGLContext::Create(WindowInfo& wi, SurfaceHand
 #if defined(ENABLE_WAYLAND)
   if (wi.type == WindowInfoType::Wayland)
     context = OpenGLContextEGLWayland::Create(wi, surface, versions_to_try, error);
+#endif
+#if defined(ENABLE_GBM)
+  if (wi.type == WindowInfoType::DRM)
+    context = OpenGLContextEGLGBM::Create(wi, surface, versions_to_try, error);
 #endif
   if (wi.type == WindowInfoType::Surfaceless)
     context = OpenGLContextEGL::Create(wi, surface, versions_to_try, error);
