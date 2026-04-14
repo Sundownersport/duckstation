@@ -32,6 +32,15 @@
 #ifdef Success
 #undef Success
 #endif
+#ifdef DisableScreenSaver
+#undef DisableScreenSaver
+#endif
+#ifdef EnableScreenSaver
+#undef EnableScreenSaver
+#endif
+#ifdef Always
+#undef Always
+#endif
 
 #include <cstdlib>
 #include <cstring>
