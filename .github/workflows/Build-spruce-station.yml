@@ -169,4 +169,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          sudo chown -R $(id -u):$(id -g) output/ 2>/dev/null || true
+          ls -la output/
           gh release upload "beta-${{ github.ref_name }}" output/duckstation-aarch64.tar.gz --clobber
