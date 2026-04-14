@@ -94,6 +94,8 @@ jobs:
             -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
             -DCMAKE_TOOLCHAIN_FILE="$HOME/toolchain.cmake" \
             -DBUILD_SDL_FRONTEND=ON \
+            -DENABLE_X11=OFF \
+            -DENABLE_WAYLAND=OFF \
             -DHOST_MIN_PAGE_SIZE=4096 \
             -DHOST_MAX_PAGE_SIZE=16384 \
             -DHOST_CACHE_LINE_SIZE=64

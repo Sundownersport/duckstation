@@ -162,29 +162,9 @@ void SDLHost::FillWindowInfo(WindowInfo* wi)
   if (!s_sdl_window)
     return;
 
-  const char* video_driver = SDL_GetCurrentVideoDriver();
-  const SDL_PropertiesID props = SDL_GetWindowProperties(s_sdl_window);
-
-#ifdef __linux__
-  if (video_driver && std::strcmp(video_driver, "wayland") == 0)
-  {
-    wi->type = WindowInfoType::Wayland;
-    wi->display_connection = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, nullptr);
-    wi->window_handle = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, nullptr);
-  }
-  else if (video_driver && std::strcmp(video_driver, "x11") == 0)
-  {
-    wi->type = WindowInfoType::XCB;
-    wi->display_connection = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, nullptr);
-    // X11 Window is a long, stored as a number property.
-    wi->window_handle =
-      reinterpret_cast<void*>(static_cast<uintptr_t>(SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0)));
-  }
-  else
-#endif
-  {
-    wi->type = WindowInfoType::Surfaceless;
-  }
+  // For handheld devices without X11/Wayland, use Surfaceless.
+  // The GPU device will create an EGL context via SDL's native window.
+  wi->type = WindowInfoType::Surfaceless;
 
   int w, h;
   SDL_GetWindowSizeInPixels(s_sdl_window, &w, &h);
@@ -627,13 +607,6 @@ std::optional<WindowInfo> Host::AcquireRenderWindow(RenderAPI render_api, bool f
 
 WindowInfoType Host::GetRenderWindowInfoType()
 {
-#ifdef __linux__
-  const char* video_driver = SDL_GetCurrentVideoDriver();
-  if (video_driver && std::strcmp(video_driver, "wayland") == 0)
-    return WindowInfoType::Wayland;
-  else if (video_driver && std::strcmp(video_driver, "x11") == 0)
-    return WindowInfoType::XCB;
-#endif
   return WindowInfoType::Surfaceless;
 }
 
