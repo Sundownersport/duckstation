@@ -222,9 +222,12 @@ enum SDL_GamepadButtonLabel
 // ============================================================================
 // Log priority mapping
 // ============================================================================
+// SDL3 log priorities: INVALID(0), TRACE(1), VERBOSE(2), DEBUG(3), INFO(4), WARN(5), ERROR(6), CRITICAL(7), COUNT(8)
+// SDL2 log priorities: VERBOSE(1), DEBUG(2), INFO(3), WARN(4), ERROR(5), CRITICAL(6), NUM(7)
+// Remap so that SDL3 priority values index correctly into SDL3-sized arrays
 #define SDL_LOG_PRIORITY_TRACE SDL_LOG_PRIORITY_VERBOSE
-#define SDL_LOG_PRIORITY_INVALID SDL_NUM_LOG_PRIORITIES
-#define SDL_LOG_PRIORITY_COUNT SDL_NUM_LOG_PRIORITIES
+#define SDL_LOG_PRIORITY_INVALID 0
+#define SDL_LOG_PRIORITY_COUNT 8
 #define SDL_SetLogOutputFunction SDL_LogSetOutputFunction
 #define SDL_SetLogPriorities SDL_LogSetAllPriority
 
@@ -241,6 +244,7 @@ enum SDL_GamepadButtonLabel
 #define SDL_DestroyHapticEffect SDL_HapticDestroyEffect
 #define SDL_StopHapticRumble SDL_HapticRumbleStop
 #define SDL_GetHapticFeatures SDL_HapticQuery
+#define SDL_CloseHaptic SDL_HapticClose
 
 // ============================================================================
 // Misc constants

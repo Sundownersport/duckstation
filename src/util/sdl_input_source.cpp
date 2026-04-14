@@ -1435,7 +1435,11 @@ bool SDLInputSource::HandleGamepadButtonEvent(const SDL_GamepadButtonEvent* ev)
   const InputBindingKey key(MakeGenericControllerButtonKey(InputSourceType::SDL, it->player_id, ev->button));
   const GenericInputBinding generic_key =
     (ev->button < s_button_info.size()) ? s_button_info[ev->button].generic_binding : GenericInputBinding::Unknown;
+#if SDL_MAJOR_VERSION >= 3
   InputManager::InvokeEvents(key, static_cast<float>(BoolToUInt32(ev->down)), generic_key);
+#else
+  InputManager::InvokeEvents(key, (ev->state == SDL_PRESSED) ? 1.0f : 0.0f, generic_key);
+#endif
   return true;
 }
 
@@ -1542,7 +1546,11 @@ bool SDLInputSource::HandleJoystickButtonEvent(const SDL_JoyButtonEvent* ev)
     return false;                                                         // Will get handled by GC event
   const u32 button = ev->button + static_cast<u32>(s_button_info.size()); // Ensure we don't conflict with GC buttons
   const InputBindingKey key(MakeGenericControllerButtonKey(InputSourceType::SDL, it->player_id, button));
+#if SDL_MAJOR_VERSION >= 3
   InputManager::InvokeEvents(key, static_cast<float>(BoolToUInt32(ev->down)));
+#else
+  InputManager::InvokeEvents(key, (ev->state == SDL_PRESSED) ? 1.0f : 0.0f);
+#endif
   return true;
 }
 
