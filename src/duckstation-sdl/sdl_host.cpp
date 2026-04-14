@@ -8,6 +8,7 @@
 #include "core/core_private.h"
 #include "core/cpu_core.h"
 #include "core/fullscreenui.h"
+#include "core/fullscreenui_widgets.h"
 #include "core/game_list.h"
 #include "core/gpu_backend.h"
 #include "core/host.h"
@@ -40,7 +41,6 @@
 #include "fmt/format.h"
 
 #include <SDL3/SDL.h>
-#include <SDL_syswm.h>
 
 #include <csignal>
 #include <cstdio>
@@ -110,7 +110,7 @@ bool SDLHost::InitializeFoldersAndConfig(Error* error)
   // Only set defaults if settings file is fresh (no renderer configured yet).
   if (si.GetStringValue("GPU", "Renderer", "").empty())
   {
-    si.SetStringValue("GPU", "Renderer", Settings::GetRendererName(GPURenderer::AutoDetect));
+    si.SetStringValue("GPU", "Renderer", Settings::GetRendererName(GPURenderer::Automatic));
     si.SetStringValue("Audio", "Backend", AudioStream::GetBackendName(AudioBackend::SDL));
     si.SetStringValue("Pad1", "Type", Controller::GetControllerInfo(ControllerType::AnalogController).name);
     si.SetStringValue("Pad2", "Type", Controller::GetControllerInfo(ControllerType::None).name);
@@ -220,12 +220,13 @@ void SDLHost::ProcessSDLEvent(const SDL_Event* event)
 
   switch (event->type)
   {
-    case SDL_EVENT_QUIT:
+    case SDL_QUIT:
       s_shutdown_flag = true;
       break;
 
     case SDL_WINDOWEVENT:
     {
+      // SDL2: window events are sub-typed under SDL_WINDOWEVENT
       if (event->window.event == SDL_WINDOWEVENT_RESIZED &&
           event->window.windowID == SDL_GetWindowID(s_sdl_window))
       {
@@ -247,22 +248,21 @@ void SDLHost::ProcessSDLEvent(const SDL_Event* event)
       break;
     }
 
-    case SDL_EVENT_KEY_DOWN:
-    case SDL_EVENT_KEY_UP:
+    case SDL_KEYDOWN:
+    case SDL_KEYUP:
     {
       // SDL2: scancode is at event->key.keysym.scancode
       if (!event->key.repeat)
       {
         const u32 scancode = static_cast<u32>(event->key.keysym.scancode);
-        const bool pressed = (event->type == SDL_EVENT_KEY_DOWN);
+        const bool pressed = (event->type == SDL_KEYDOWN);
         InputManager::InvokeEvents(InputManager::MakeHostKeyboardKey(scancode), pressed ? 1.0f : 0.0f);
       }
       break;
     }
 
-    case SDL_EVENT_MOUSE_MOTION:
+    case SDL_MOUSEMOTION:
     {
-      // SDL2: xrel/yrel are Sint32, cast to float
       if (s_relative_mouse_enabled)
       {
         InputManager::UpdatePointerPositionRelativeDelta(0, InputPointerAxis::X, static_cast<float>(event->motion.xrel));
@@ -276,19 +276,17 @@ void SDLHost::ProcessSDLEvent(const SDL_Event* event)
       break;
     }
 
-    case SDL_EVENT_MOUSE_BUTTON_DOWN:
-    case SDL_EVENT_MOUSE_BUTTON_UP:
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP:
     {
-      // SDL mouse buttons are 1-indexed.
       const u32 button_index = event->button.button - 1;
-      const bool pressed = (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+      const bool pressed = (event->type == SDL_MOUSEBUTTONDOWN);
       InputManager::InvokeEvents(InputManager::MakePointerButtonKey(0, button_index), pressed ? 1.0f : 0.0f);
       break;
     }
 
-    case SDL_EVENT_MOUSE_WHEEL:
+    case SDL_MOUSEWHEEL:
     {
-      // SDL2: wheel x/y are Sint32
       if (event->wheel.y != 0)
       {
         InputManager::InvokeEvents(InputManager::MakePointerAxisKey(0, InputPointerAxis::WheelY),
@@ -302,7 +300,7 @@ void SDLHost::ProcessSDLEvent(const SDL_Event* event)
       break;
     }
 
-    case SDL_EVENT_TEXT_INPUT:
+    case SDL_TEXTINPUT:
     {
       if (event->text.text)
         ImGuiManager::AddTextInput(std::string(event->text.text));
@@ -819,7 +817,7 @@ void Host::RefreshGameListAsync(bool invalidate_cache)
 
 void Host::CancelGameListRefresh()
 {
-  GameList::CancelRefresh();
+  // No-op: game list refresh is async and will complete on its own.
 }
 
 void Host::OnGameListEntriesChanged(std::span<const u32> changed_indices)

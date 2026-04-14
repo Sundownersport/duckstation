@@ -200,7 +200,7 @@ if(NOT ANDROID)
       sdl_input_source.h
     )
     target_compile_definitions(util PUBLIC ENABLE_SDL)
-    target_include_directories(util PUBLIC "${CMAKE_SOURCE_DIR}/dep/sdl3-compat")
+    target_include_directories(util BEFORE PUBLIC "${CMAKE_SOURCE_DIR}/dep/sdl3-compat")
     target_link_libraries(util PUBLIC cubeb SDL2::SDL2)
   else()
     target_sources(util PRIVATE
