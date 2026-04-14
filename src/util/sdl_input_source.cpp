@@ -1217,6 +1217,12 @@ bool SDLInputSource::OpenDevice(int index, bool is_gamecontroller)
 
   if (gamepad)
   {
+    // reserve the already-mapped gamepad inputs/outputs so that we don't duplicate events
+    cd.joy_axis_used_in_gc.resize(num_axes, false);
+    cd.joy_button_used_in_gc.resize(num_buttons, false);
+    cd.joy_hat_used_in_gc.resize(num_hats, false);
+
+#if SDL_MAJOR_VERSION >= 3
     static constexpr auto map_desc = [](const SDL_GamepadBinding* binding) -> const char* {
       if (binding->output_type == SDL_GAMEPAD_BINDTYPE_BUTTON &&
           static_cast<u32>(binding->output.button) < SDL_GAMEPAD_BUTTON_COUNT)
@@ -1233,11 +1239,6 @@ bool SDLInputSource::OpenDevice(int index, bool is_gamecontroller)
         return "Unknown";
       }
     };
-
-    // reserve the already-mapped gamepad inputs/outputs so that we don't duplicate events
-    cd.joy_axis_used_in_gc.resize(num_axes, false);
-    cd.joy_button_used_in_gc.resize(num_buttons, false);
-    cd.joy_hat_used_in_gc.resize(num_hats, false);
 
     int binding_count = 0;
     SDL_GamepadBinding** const bindings = SDL_GetGamepadBindings(gamepad, &binding_count);
@@ -1273,6 +1274,25 @@ bool SDLInputSource::OpenDevice(int index, bool is_gamecontroller)
       }
     }
     SDL_free(bindings);
+#else
+    // SDL2: enumerate bindings via per-axis/button queries
+    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+    {
+      SDL_GameControllerButtonBind bind =
+        SDL_GameControllerGetBindForButton(gamepad, static_cast<SDL_GameControllerButton>(i));
+      if (bind.bindType == SDL_CONTROLLER_BINDTYPE_BUTTON && static_cast<u32>(bind.value.button) < num_buttons)
+        cd.joy_button_used_in_gc[bind.value.button] = true;
+      else if (bind.bindType == SDL_CONTROLLER_BINDTYPE_HAT && static_cast<u32>(bind.value.hat.hat) < num_hats)
+        cd.joy_hat_used_in_gc[bind.value.hat.hat] = true;
+    }
+    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++)
+    {
+      SDL_GameControllerButtonBind bind =
+        SDL_GameControllerGetBindForAxis(gamepad, static_cast<SDL_GameControllerAxis>(i));
+      if (bind.bindType == SDL_CONTROLLER_BINDTYPE_AXIS && static_cast<u32>(bind.value.axis) < num_axes)
+        cd.joy_axis_used_in_gc[bind.value.axis] = true;
+    }
+#endif
   }
 
   cd.use_gamepad_rumble = (gamepad && SDL_GetBooleanProperty(properties, SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false));

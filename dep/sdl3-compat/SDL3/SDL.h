@@ -133,8 +133,8 @@ typedef SDL_ControllerSensorEvent SDL_GamepadSensorEvent;
 #define SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT
 #define SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR SDL_CONTROLLER_TYPE_NINTENDO_SWITCH_JOYCON_PAIR
 #define SDL_GAMEPAD_TYPE_GAMECUBE SDL_CONTROLLER_TYPE_UNKNOWN
-// SDL_GAMEPAD_TYPE_COUNT: account for all SDL2 controller types up to VIRTUAL
-#define SDL_GAMEPAD_TYPE_COUNT 20
+// Must match the number of entries in DuckStation's s_sdl_gamepad_type_names array (12)
+#define SDL_GAMEPAD_TYPE_COUNT 12
 
 // ============================================================================
 // Gamepad binding
@@ -167,10 +167,8 @@ enum SDL_GamepadButtonLabel
 
 // ============================================================================
 // Sensor constants
+// SDL2 has SDL_SensorType as an enum. SDL_SENSOR_ACCEL exists in SDL2 2.0.14+.
 // ============================================================================
-#ifndef SDL_SENSOR_ACCEL
-#define SDL_SENSOR_ACCEL 1
-#endif
 
 // ============================================================================
 // Window flags
@@ -195,6 +193,18 @@ enum SDL_GamepadButtonLabel
 #endif
 #ifndef SDL_HINT_JOYSTICK_LINUX_DIGITAL_HATS
 #define SDL_HINT_JOYSTICK_LINUX_DIGITAL_HATS "SDL_JOYSTICK_LINUX_DIGITAL_HATS"
+#endif
+#ifndef SDL_HINT_JOYSTICK_HIDAPI_PS3
+#define SDL_HINT_JOYSTICK_HIDAPI_PS3 "SDL_JOYSTICK_HIDAPI_PS3"
+#endif
+#ifndef SDL_HINT_JOYSTICK_HIDAPI_PS5_PLAYER_LED
+#define SDL_HINT_JOYSTICK_HIDAPI_PS5_PLAYER_LED "SDL_JOYSTICK_HIDAPI_PS5_PLAYER_LED"
+#endif
+#ifndef SDL_HINT_JOYSTICK_HIDAPI_WII
+#define SDL_HINT_JOYSTICK_HIDAPI_WII "SDL_JOYSTICK_HIDAPI_WII"
+#endif
+#ifndef SDL_HINT_JOYSTICK_RAWINPUT
+#define SDL_HINT_JOYSTICK_RAWINPUT "SDL_JOYSTICK_RAWINPUT"
 #endif
 #ifndef SDL_HINT_JOYSTICK_IOKIT
 #define SDL_HINT_JOYSTICK_IOKIT "SDL_JOYSTICK_IOKIT"
@@ -238,12 +248,8 @@ enum SDL_GamepadButtonLabel
 #ifndef SDL_STANDARD_GRAVITY
 #define SDL_STANDARD_GRAVITY 9.80665f
 #endif
-#ifndef SDL_DEFAULT_XBOX_HIDAPI
-#define SDL_DEFAULT_XBOX_HIDAPI 0
-#endif
-#ifndef SDL_hidapi_ps5
-#define SDL_hidapi_ps5 0
-#endif
+// NOTE: SDL_DEFAULT_XBOX_HIDAPI and SDL_hidapi_ps5 are local variables in the
+// input source, not SDL defines. Do not define them here.
 
 // ============================================================================
 // Properties API (SDL3 only — stub for SDL2)
@@ -316,7 +322,8 @@ static inline bool SendGamepadEffect(SDL_GameController* gp, const void* data, i
 #define SDL_GetGamepadAxis SDL_GameControllerGetAxis
 #define SDL_GetGamepadButton SDL_GameControllerGetButton
 #define SDL_GetGamepadJoystick SDL_GameControllerGetJoystick
-#define SDL_GetGamepadName SDL_GameControllerGetName
+static inline const char* SDL3_GetGamepadName(SDL_GameController* gp) { return ::SDL_GameControllerGetName(gp); }
+#define SDL_GetGamepadName SDL3_GetGamepadName
 #define SDL_GetGamepadPlayerIndex SDL_GameControllerGetPlayerIndex
 #define SDL_GetGamepadVendor SDL_GameControllerGetVendor
 #define SDL_GetGamepadProduct SDL_GameControllerGetProduct
