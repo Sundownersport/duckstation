@@ -322,7 +322,7 @@ static inline bool SendGamepadEffect(SDL_GameController* gp, const void* data, i
 #define SDL_GetGamepadAxis SDL_GameControllerGetAxis
 #define SDL_GetGamepadButton SDL_GameControllerGetButton
 #define SDL_GetGamepadJoystick SDL_GameControllerGetJoystick
-static inline const char* SDL3_GetGamepadName(SDL_GameController* gp) { return SDL_GameControllerGetName(gp); }
+static inline const char* SDL3_GetGamepadName(SDL_GameController* gp) { return SDL_GameControllerName(gp); }
 #define SDL_GetGamepadName SDL3_GetGamepadName
 #define SDL_GetGamepadPlayerIndex SDL_GameControllerGetPlayerIndex
 #define SDL_GetGamepadVendor SDL_GameControllerGetVendor
