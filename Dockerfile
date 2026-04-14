@@ -8,14 +8,16 @@ RUN dpkg --add-architecture arm64 && \
     echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal main restricted universe multiverse" >> /etc/apt/sources.list && \
     echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal-updates main restricted universe multiverse" >> /etc/apt/sources.list
 
-# Install LLVM/Clang 19 from official LLVM apt repository
+# Add LLVM and Kitware apt repositories (keys first, then repos)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget gnupg software-properties-common apt-transport-https ca-certificates && \
+    # Kitware (CMake) - add key BEFORE repository
+    wget -qO- https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add - && \
+    echo "deb [arch=amd64] https://apt.kitware.com/ubuntu/ focal main" >> /etc/apt/sources.list && \
+    # LLVM (Clang 19)
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    echo "deb [arch=amd64] http://apt.llvm.org/focal/ llvm-toolchain-focal-19 main" >> /etc/apt/sources.list && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \
-    wget -qO- https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add -
+    echo "deb [arch=amd64] http://apt.llvm.org/focal/ llvm-toolchain-focal-19 main" >> /etc/apt/sources.list
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
