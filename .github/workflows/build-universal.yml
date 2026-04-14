@@ -1,0 +1,175 @@
+name: Build DuckStation SDL (aarch64)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: ghcr.io/duckstation/cross-build-arm64:latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set Safe Directory
+        run: git config --global --add safe.directory "*"
+
+      - name: Ensure beta release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="beta-${{ github.ref_name }}"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" \
+              --target "${{ github.ref_name }}" \
+              --title "Beta Build (${{ github.ref_name }})" \
+              --prerelease \
+              --notes "DuckStation SDL binaries built from ${{ github.ref_name }}" \
+            || true
+
+      - name: Create Binary Aliases
+        run: |
+          ln -sf llvm-strip-19 /usr/bin/llvm-strip
+
+      - name: Install SDL2 development headers (arm64)
+        run: |
+          # Install arm64 SDL2 dev into the chroot for cross-compilation.
+          # The chroot provides the target sysroot; install SDL2 there.
+          dpkg --add-architecture arm64 2>/dev/null || true
+          # Add arm64 apt sources if not already present
+          if ! grep -q "ports.ubuntu.com" /etc/apt/sources.list 2>/dev/null; then
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" >> /etc/apt/sources.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list
+          fi
+          apt-get update -qq || true
+          apt-get install -y --no-install-recommends libsdl2-dev:arm64 || {
+            echo "Multiarch install failed, extracting manually into chroot..."
+            cd /tmp
+            apt-get download libsdl2-dev:arm64 libsdl2-2.0-0:arm64 2>/dev/null || {
+              # Fallback: download from Ubuntu package archive
+              wget -q http://ports.ubuntu.com/pool/universe/libs/libsdl2/libsdl2-dev_2.26.5+dfsg-1build1_arm64.deb || true
+              wget -q http://ports.ubuntu.com/pool/universe/libs/libsdl2/libsdl2-2.0-0_2.26.5+dfsg-1build1_arm64.deb || true
+            }
+            for deb in *.deb; do
+              [ -f "$deb" ] && dpkg-deb -x "$deb" /arm64-chroot/
+            done
+            cd -
+          }
+
+      - name: Download Dependencies
+        run: |
+          DEPS_VERSION=$(cat dep/PREBUILT-VERSION)
+          cd dep/prebuilt
+          curl --retry 5 --retry-all-errors -LO "https://github.com/duckstation/dependencies/releases/download/$DEPS_VERSION/deps-linux-cross-arm64.tar.xz"
+          sha256sum --check --ignore-missing ../PREBUILT-SHA256SUMS
+          tar -xf deps-linux-cross-arm64.tar.xz
+          rm deps-linux-cross-arm64.tar.xz
+
+      - name: Set Up Toolchain File
+        run: |
+          cp "dep/prebuilt/linux-cross-arm64/toolchain.cmake" "$HOME/toolchain.cmake"
+          echo "set(CMAKE_FIND_ROOT_PATH \"$PWD/dep/prebuilt/linux-cross-arm64;/arm64-chroot\")" >> "$HOME/toolchain.cmake"
+          echo "set(CMAKE_C_COMPILER clang-19)" >> "$HOME/toolchain.cmake"
+          echo "set(CMAKE_C_COMPILER_AR llvm-ar-19)" >> "$HOME/toolchain.cmake"
+          echo "set(CMAKE_C_COMPILER_RANLIB llvm-ranlib-19)" >> "$HOME/toolchain.cmake"
+          echo "set(CMAKE_CXX_COMPILER clang++-19)" >> "$HOME/toolchain.cmake"
+          echo "set(CMAKE_CXX_COMPILER_AR llvm-ar-19)" >> "$HOME/toolchain.cmake"
+          echo "set(CMAKE_CXX_COMPILER_RANLIB llvm-ranlib-19)" >> "$HOME/toolchain.cmake"
+          echo 'set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")' >> "$HOME/toolchain.cmake"
+          echo 'set(CMAKE_MODULE_LINKER_FLAGS_INIT "-fuse-ld=lld")' >> "$HOME/toolchain.cmake"
+          echo 'set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")' >> "$HOME/toolchain.cmake"
+
+      - name: Generate CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+            -DCMAKE_TOOLCHAIN_FILE="$HOME/toolchain.cmake" \
+            -DBUILD_SDL_FRONTEND=ON \
+            -DHOST_MIN_PAGE_SIZE=4096 \
+            -DHOST_MAX_PAGE_SIZE=16384 \
+            -DHOST_CACHE_LINE_SIZE=64
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Package
+        run: |
+          set -e
+          OUTDIR="duckstation-aarch64"
+          mkdir -p "$OUTDIR/lib"
+
+          # Copy binary and resources
+          cp build/bin/duckstation-sdl "$OUTDIR/"
+          if [ -d build/bin/resources ]; then
+            cp -r build/bin/resources "$OUTDIR/"
+          fi
+
+          # Collect shared library dependencies from prebuilt deps
+          DEPS="dep/prebuilt/linux-cross-arm64"
+          CHROOT="/arm64-chroot"
+          SKIP_LIBS="linux-vdso|ld-linux|libc\.so|libm\.so|libdl\.so|libpthread\.so|librt\.so|libgcc_s|libstdc\+\+"
+
+          collect_lib() {
+            local lib="$1"
+            [ -f "$OUTDIR/lib/$lib" ] && return
+            echo "$lib" | grep -qE "$SKIP_LIBS" && return
+
+            local src
+            src=$(find "$DEPS/lib" "$CHROOT/usr/lib" "$CHROOT/lib" -maxdepth 2 -name "$lib" 2>/dev/null | head -1)
+            if [ -n "$src" ]; then
+              cp -L "$src" "$OUTDIR/lib/$lib"
+              echo "  Collected: $lib"
+            fi
+          }
+
+          # Find all NEEDED libraries from the binary
+          echo "=== Collecting dependencies ==="
+          aarch64-linux-gnu-readelf -d "$OUTDIR/duckstation-sdl" 2>/dev/null | grep NEEDED | \
+            sed 's/.*\[\(.*\)\]/\1/' | while read -r lib; do
+              collect_lib "$lib"
+            done
+
+          # Recursively collect transitive deps from collected libs
+          for so in "$OUTDIR"/lib/*.so*; do
+            [ -f "$so" ] || continue
+            aarch64-linux-gnu-readelf -d "$so" 2>/dev/null | grep NEEDED | \
+              sed 's/.*\[\(.*\)\]/\1/' | while read -r lib; do
+                collect_lib "$lib"
+              done
+          done
+
+          # Set RPATH so the binary finds its bundled libs
+          patchelf --set-rpath '$ORIGIN/lib' "$OUTDIR/duckstation-sdl"
+          for so in "$OUTDIR"/lib/*.so*; do
+            [ -f "$so" ] || continue
+            patchelf --set-rpath '$ORIGIN' "$so" 2>/dev/null || true
+          done
+
+          # Strip everything
+          llvm-strip-19 "$OUTDIR/duckstation-sdl" 2>/dev/null || true
+          for so in "$OUTDIR"/lib/*.so*; do
+            [ -f "$so" ] || continue
+            llvm-strip-19 "$so" 2>/dev/null || true
+          done
+
+          # Create tarball
+          tar -czf duckstation-aarch64.tar.gz "$OUTDIR"
+
+          echo "=== Package contents ==="
+          ls -la "$OUTDIR/"
+          ls -la "$OUTDIR/lib/" 2>/dev/null || true
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "beta-${{ github.ref_name }}" duckstation-aarch64.tar.gz --clobber

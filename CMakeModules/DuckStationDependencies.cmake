@@ -83,8 +83,23 @@ find_package(Shaderc 2026.1 REQUIRED
              NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/Shaderc")
 find_package(spirv_cross_c_shared REQUIRED
              NO_DEFAULT_PATH PATHS "${DEPS_PATH}/share/spirv_cross_c_shared/cmake")
-find_package(SDL3 3.4.4 REQUIRED
-             NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/SDL3")
+if(BUILD_SDL_FRONTEND)
+  # Use system SDL2 with our SDL3-to-SDL2 compat header.
+  # Use find_path/find_library so cross-compilation CMAKE_FIND_ROOT_PATH works.
+  find_path(SDL2_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL2)
+  find_library(SDL2_LIBRARY SDL2)
+  if(NOT SDL2_INCLUDE_DIR OR NOT SDL2_LIBRARY)
+    message(FATAL_ERROR "SDL2 not found. Install libsdl2-dev for your target architecture.")
+  endif()
+  message(STATUS "Using SDL2: ${SDL2_LIBRARY} (includes: ${SDL2_INCLUDE_DIR})")
+  add_library(SDL2::SDL2 SHARED IMPORTED)
+  set_target_properties(SDL2::SDL2 PROPERTIES
+    IMPORTED_LOCATION "${SDL2_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${SDL2_INCLUDE_DIR}")
+else()
+  find_package(SDL3 3.4.4 REQUIRED
+               NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/SDL3")
+endif()
 
 # Verify dependency paths.
 foreach(dep zstd WebP PNG libjpeg-turbo freetype harfbuzz plutosvg cpuinfo
@@ -95,23 +110,25 @@ foreach(dep zstd WebP PNG libjpeg-turbo freetype harfbuzz plutosvg cpuinfo
   endif()
 endforeach()
 
-# All our builds include Qt, so this is not a problem.
-set(QT_NO_PRIVATE_MODULE_WARNING ON)
+if(NOT BUILD_SDL_FRONTEND)
+  # All our builds include Qt, so this is not a problem.
+  set(QT_NO_PRIVATE_MODULE_WARNING ON)
 
-# Should be prebuilt.
-if(LINUX)
-  find_package(Qt6 6.11.0 REQUIRED
-                NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/Qt6"
-                COMPONENTS Core Gui GuiPrivate Widgets LinguistTools DBus)
-else()
-  find_package(Qt6 6.11.0 REQUIRED
-                NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/Qt6"
-                COMPONENTS Core Gui GuiPrivate Widgets LinguistTools)
-endif()
+  # Should be prebuilt.
+  if(LINUX)
+    find_package(Qt6 6.11.0 REQUIRED
+                  NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/Qt6"
+                  COMPONENTS Core Gui GuiPrivate Widgets LinguistTools DBus)
+  else()
+    find_package(Qt6 6.11.0 REQUIRED
+                  NO_DEFAULT_PATH PATHS "${DEPS_PATH}/lib/cmake/Qt6"
+                  COMPONENTS Core Gui GuiPrivate Widgets LinguistTools)
+  endif()
 
-# Have to verify it down here, don't want users using unpatched Qt.
-if(NOT Qt6_DIR MATCHES "^${DEPS_PATH}")
-message(FATAL_ERROR "Using incorrect Qt library. Check your dependencies.")
+  # Have to verify it down here, don't want users using unpatched Qt.
+  if(NOT Qt6_DIR MATCHES "^${DEPS_PATH}")
+  message(FATAL_ERROR "Using incorrect Qt library. Check your dependencies.")
+  endif()
 endif()
 
 # Libraries that are pulled in from host.

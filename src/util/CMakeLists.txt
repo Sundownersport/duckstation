@@ -192,19 +192,26 @@ get_target_property(SPIRV_CROSS_INCLUDE_DIR spirv-cross-c-shared INTERFACE_INCLU
 target_include_directories(util PUBLIC ${SHADERC_INCLUDE_DIR} ${SPIRV_CROSS_INCLUDE_DIR})
 
 if(NOT ANDROID)
-  target_sources(util PRIVATE
-    cubeb_audio_stream.cpp
-    sdl_audio_stream.cpp
-    sdl_input_source.cpp
-    sdl_input_source.h
-  )
-  target_compile_definitions(util PUBLIC
-    ENABLE_SDL
-  )
-  target_link_libraries(util PUBLIC
-    cubeb
-    SDL3::SDL3
-  )
+  if(BUILD_SDL_FRONTEND)
+    # SDL2 build: use cubeb for audio, SDL2 for input, compat header for SDL3 names
+    target_sources(util PRIVATE
+      cubeb_audio_stream.cpp
+      sdl_input_source.cpp
+      sdl_input_source.h
+    )
+    target_compile_definitions(util PUBLIC ENABLE_SDL)
+    target_include_directories(util PUBLIC "${CMAKE_SOURCE_DIR}/dep/sdl3-compat")
+    target_link_libraries(util PUBLIC cubeb SDL2::SDL2)
+  else()
+    target_sources(util PRIVATE
+      cubeb_audio_stream.cpp
+      sdl_audio_stream.cpp
+      sdl_input_source.cpp
+      sdl_input_source.h
+    )
+    target_compile_definitions(util PUBLIC ENABLE_SDL)
+    target_link_libraries(util PUBLIC cubeb SDL3::SDL3)
+  endif()
   # FFmpeg loaded dynamically on demand.
   target_include_directories(util PUBLIC ${FFMPEG_INCLUDE_DIRS})
 endif()

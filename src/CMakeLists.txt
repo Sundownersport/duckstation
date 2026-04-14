@@ -2,7 +2,12 @@ add_subdirectory(common)
 add_subdirectory(util)
 add_subdirectory(core)
 add_subdirectory(scmversion)
-add_subdirectory(duckstation-qt)
+
+if(BUILD_SDL_FRONTEND)
+  add_subdirectory(duckstation-sdl)
+else()
+  add_subdirectory(duckstation-qt)
+endif()
 
 if(WIN32 OR APPLE)
   add_subdirectory(updater)
