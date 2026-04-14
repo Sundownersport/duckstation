@@ -170,6 +170,11 @@ jobs:
           ls -la "$OUTDIR/"
           ls -la "$OUTDIR/lib/" 2>/dev/null || true
 
+      - name: Install GitHub CLI
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends gh
+
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
