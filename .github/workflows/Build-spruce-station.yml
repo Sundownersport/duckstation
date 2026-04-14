@@ -52,9 +52,9 @@ jobs:
           mkdir -p output ccache-aarch64
           docker run --rm \
             -e CCACHE_DIR=/ccache \
-            -v ${{ github.workspace }}:/src \
-            -v ${{ github.workspace }}/output:/output \
-            -v ${{ github.workspace }}/ccache-aarch64:/ccache \
+            -v "$(pwd)":/src \
+            -v "$(pwd)/output":/output \
+            -v "$(pwd)/ccache-aarch64":/ccache \
             duckstation-builder bash -c '
               set -e
 
