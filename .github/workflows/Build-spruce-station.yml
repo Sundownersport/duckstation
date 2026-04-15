@@ -165,5 +165,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apt-get update -qq && apt-get install -y --no-install-recommends gh 2>/dev/null || true
+          # Install gh CLI via direct download (apt sources are polluted with arm64)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+          apt-get update -qq -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/github-cli.list -o Dir::Etc::sourceparts=/dev/null
+          apt-get install -y --no-install-recommends gh
           gh release upload "beta-${{ github.ref_name }}" duckstation-aarch64.tar.gz --clobber
