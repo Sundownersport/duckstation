@@ -17,7 +17,9 @@ RUN apt-get update && \
     echo "deb [arch=amd64] https://apt.kitware.com/ubuntu/ focal main" >> /etc/apt/sources.list && \
     # LLVM (Clang 19)
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    echo "deb [arch=amd64] http://apt.llvm.org/focal/ llvm-toolchain-focal-19 main" >> /etc/apt/sources.list
+    echo "deb [arch=amd64] http://apt.llvm.org/focal/ llvm-toolchain-focal-19 main" >> /etc/apt/sources.list && \
+    # GCC toolchain PPA (GCC 12 for C++20 libstdc++)
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -27,10 +29,9 @@ RUN apt-get update && \
     clang-19 lld-19 llvm-19 \
     # ARM64 cross-compiler
     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-    # libc++ for full C++20 library support (libstdc++ on Ubuntu 20.04 is too old)
-    # Need both amd64 (host tools) and arm64 (target) versions
-    libc++-19-dev libc++abi-19-dev \
-    libc++-19-dev:arm64 libc++abi-19-dev:arm64 \
+    # GCC 12 cross-compiler for C++20 libstdc++ (bit_cast, etc.)
+    # From ubuntu-toolchain-r/test PPA
+    gcc-12-aarch64-linux-gnu g++-12-aarch64-linux-gnu libstdc++-12-dev-arm64-cross \
     # ARM64 development libraries
     libsdl2-dev:arm64 \
     libdrm-dev:arm64 \
