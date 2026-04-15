@@ -28,7 +28,9 @@ RUN apt-get update && \
     # ARM64 cross-compiler
     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
     # libc++ for full C++20 library support (libstdc++ on Ubuntu 20.04 is too old)
+    # Need both amd64 (host tools) and arm64 (target) versions
     libc++-19-dev libc++abi-19-dev \
+    libc++-19-dev:arm64 libc++abi-19-dev:arm64 \
     # ARM64 development libraries
     libsdl2-dev:arm64 \
     libdrm-dev:arm64 \
