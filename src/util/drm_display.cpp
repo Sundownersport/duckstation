@@ -15,7 +15,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-LOG_CHANNEL(DRMDisplay);
+LOG_CHANNEL(GPUDevice);
 
 DRMDisplay::DRMDisplay(int card) : m_card_id(card) {}
 
