@@ -1,25 +1,19 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Configure multiarch for arm64 cross-compilation (glibc 2.31)
+# Configure multiarch for arm64 cross-compilation
 RUN dpkg --add-architecture arm64 && \
     sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list && \
-    echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal main restricted universe multiverse" >> /etc/apt/sources.list && \
-    echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports focal-updates main restricted universe multiverse" >> /etc/apt/sources.list
+    echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse" >> /etc/apt/sources.list
 
-# Add LLVM and Kitware apt repositories (keys first, then repos)
+# Add LLVM apt repository for Clang 19
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget gnupg software-properties-common apt-transport-https ca-certificates && \
-    # Kitware (CMake) - add key BEFORE repository
-    wget -qO- https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add - && \
-    echo "deb [arch=amd64] https://apt.kitware.com/ubuntu/ focal main" >> /etc/apt/sources.list && \
-    # LLVM (Clang 19)
     wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    echo "deb [arch=amd64] http://apt.llvm.org/focal/ llvm-toolchain-focal-19 main" >> /etc/apt/sources.list && \
-    # GCC toolchain PPA (GCC 12 for C++20 libstdc++)
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    echo "deb [arch=amd64] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-19 main" >> /etc/apt/sources.list
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -27,11 +21,9 @@ RUN apt-get update && \
     build-essential cmake ninja-build git pkg-config ccache patchelf python3 \
     # Clang 19 cross-compilation toolchain
     clang-19 lld-19 llvm-19 \
-    # ARM64 cross-compiler
-    gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-    # GCC 12 cross-compiler for C++20 libstdc++ (bit_cast, etc.)
-    # From ubuntu-toolchain-r/test PPA
-    gcc-12-aarch64-linux-gnu g++-12-aarch64-linux-gnu libstdc++-12-dev-arm64-cross \
+    # ARM64 cross-compiler (GCC 12 for C++20 libstdc++)
+    gcc-12-aarch64-linux-gnu g++-12-aarch64-linux-gnu \
+    libstdc++-12-dev-arm64-cross \
     # ARM64 development libraries
     libsdl2-dev:arm64 \
     libdrm-dev:arm64 \
@@ -43,7 +35,6 @@ RUN apt-get update && \
     libcurl4-openssl-dev:arm64 \
     libudev-dev:arm64 \
     zlib1g-dev:arm64 \
-    libglib2.0-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symlinks for tools
@@ -54,6 +45,7 @@ RUN ln -sf /usr/bin/clang-19 /usr/bin/clang && \
     ln -sf /usr/bin/llvm-ar-19 /usr/bin/llvm-ar && \
     ln -sf /usr/bin/llvm-ranlib-19 /usr/bin/llvm-ranlib && \
     ln -sf /usr/bin/llvm-strip-19 /usr/bin/llvm-strip && \
-    ln -sf /usr/bin/llvm-objcopy-19 /usr/bin/llvm-objcopy
+    ln -sf /usr/bin/llvm-objcopy-19 /usr/bin/llvm-objcopy && \
+    ln -sf /usr/bin/aarch64-linux-gnu-pkg-config /usr/bin/aarch64-linux-gnu-pkg-config 2>/dev/null || true
 
 WORKDIR /build
