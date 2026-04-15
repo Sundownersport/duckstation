@@ -25,8 +25,10 @@ RUN apt-get update && \
     build-essential cmake ninja-build git pkg-config ccache patchelf python3 \
     # Clang 19 cross-compilation toolchain
     clang-19 lld-19 llvm-19 \
-    # ARM64 cross-compiler (needed for some system libs)
+    # ARM64 cross-compiler and C++ stdlib (GCC 10 for C++20 library support)
     gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+    gcc-10-aarch64-linux-gnu g++-10-aarch64-linux-gnu \
+    libstdc++-10-dev-arm64-cross \
     # ARM64 development libraries
     libsdl2-dev:arm64 \
     libdrm-dev:arm64 \
