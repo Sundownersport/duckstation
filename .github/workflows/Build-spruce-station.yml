@@ -158,7 +158,10 @@ jobs:
           ls -la "$OUTDIR/"
           ls -la "$OUTDIR/lib/" 2>/dev/null || true
 
-          echo "=== glibc version check ==="
+          echo "=== Patching glibc version requirements for 2.31 compat ==="
+          python3 patch_verneed.py "$OUTDIR/duckstation-sdl"
+
+          echo "=== glibc version check (after patch) ==="
           aarch64-linux-gnu-readelf -V "$OUTDIR/duckstation-sdl" 2>/dev/null | grep GLIBC | sort -u || true
 
       - name: Upload to release
